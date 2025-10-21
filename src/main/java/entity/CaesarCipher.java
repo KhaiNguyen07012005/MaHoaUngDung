@@ -2,11 +2,18 @@ package entity; // Package entity cho cipher classes (giữ nguyên cấu trúc 
 
 // Import AWT cho layout (BorderLayout, GridLayout) và events.
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 // Import Swing cho UI components (JFrame, JTextArea, etc.).
+import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -15,247 +22,401 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.UIManager;
+import javax.swing.UnsupportedLookAndFeelException;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+
+// Import Program để quay về menu chính.
+import app.Program;
 
 /**
- * Lớp CaesarCipher: JFrame cho thuật toán Caesar Cipher với layout giống demo.
- * Layout: Input textarea trên cùng, key + button encrypt bên phải input. Dưới:
- * Output textarea, key + button decrypt bên phải output. Logic: Dịch shift %26,
- * chỉ chữ cái, giữ case và ký tự khác (space, etc.). Demo: Input "hello moto"
- * key 5 → "mjqt ryt"; Decrypt key 0 (hoặc shift gốc) → gốc.
+ * Lớp CaesarCipher: JFrame cho thuật toán Caesar Cipher với giao diện cân bằng
+ * hoàn hảo. Layout: BorderLayout frame + GridBagLayout cho input/output panel
+ * con để align thẳng hàng. Thêm nút quay về menu chính.
  */
 public class CaesarCipher extends JFrame { // Kế thừa JFrame để tạo cửa sổ chính.
 
-	// Components cho input section.
-	private JTextArea inputTextArea; // TextArea nhập plaintext (trên cùng).
-	private JTextField inputKeyField; // TextField key cho encrypt (bên phải input).
-	private JButton encryptButton; // Button "Encryption" bên dưới key input.
-
-	// Components cho output section.
-	private JTextArea outputTextArea; // TextArea hiển thị ciphertext (dưới input).
-	private JTextField outputKeyField; // TextField key cho decrypt (bên phải output, mặc định 0 cho demo).
-	private JButton decryptButton; // Button "Decryption" bên dưới key output.
-
-	// Scroll panes cho textarea.
-	private JScrollPane inputScrollPane; // Scroll cho input textarea.
-	private JScrollPane outputScrollPane; // Scroll cho output textarea.
+	private JTextArea inputTextArea;
+	private JTextField inputKeyField;
+	private JButton encryptButton;
+	private JTextArea outputTextArea;
+	private JTextField outputKeyField;
+	private JButton decryptButton;
+	private JScrollPane inputScrollPane;
+	private JScrollPane outputScrollPane;
+	private static final Color BG_COLOR = new Color(240, 248, 255); // Xanh nhạt
+	private static final Color BUTTON_COLOR = new Color(173, 216, 230); // Xanh nhạt cho button
+	private static final Color HOVER_COLOR = new Color(135, 206, 235); // Xanh sáng hơn khi hover
+	private static final Color BORDER_COLOR = new Color(70, 130, 180); // Xanh đậm cho border
+	private static final Color BACK_BUTTON_COLOR = new Color(255, 182, 193); // Màu hồng nhạt cho nút quay về
 
 	/**
 	 * Constructor: Khởi tạo UI, layout, và listeners.
 	 */
 	public CaesarCipher() {
-		initComponents(); // Gọi method tạo và layout components (tương tự NetBeans generated).
-		setupEventHandlers(); // Gọi method thiết lập listeners cho buttons.
-		setTitle("Caesar cipher demo"); // Title frame giống demo.
-		setSize(600, 500); // Kích thước frame (rộng hơn để giống demo).
-		setLocationRelativeTo(null); // Đặt frame ở giữa màn hình.
-		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Đóng frame = thoát app (demo đơn lẻ).
-		setResizable(false); // Không cho resize để giữ layout.
+		initLookAndFeel();
+		// Gọi method
+		initComponents();
+		setupEventHandlers();
+		setTitle("Caesar Cipher"); // Tiêu đề
+		setSize(750, 600); // Kích thước
+		setLocationRelativeTo(null);
+		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE); // Đóng frame mà không thoát app
+		setResizable(false); // Không cho co giãn
+		getContentPane().setBackground(BG_COLOR); // Themee
+		inputTextArea.requestFocus();
 	}
 
 	/**
-	 * Method initComponents: Tạo components và layout giống screenshot demo. Sử
-	 * dụng BorderLayout cho frame: NORTH cho input section, CENTER cho output
-	 * section. Mỗi section dùng GridBagLayout để đặt textarea trái, key/button
-	 * phải.
+	 * Áp dụng Nimbus Look and Feel cho giao diện hiện đại.
+	 */
+	private void initLookAndFeel() {
+		try {
+			for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
+				if ("Nimbus".equals(info.getName())) {
+					UIManager.setLookAndFeel(info.getClassName());
+					break;
+				}
+			}
+		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException
+				| UnsupportedLookAndFeelException ex) {
+			// Bỏ qua, dùng default.
+		}
+	}
+
+	/**
+	 * Method initComponents: Layout cân bằng với panel con cho input/output. Mỗi
+	 * panel: GridBag - textarea trái (weightx=1, weighty=1), key section phải
+	 * (BoxLayout dọc). Thêm nút quay về menu ở SOUTH.
 	 */
 	private void initComponents() {
-		// Tạo panel cho input section (NORTH của frame).
-		var inputPanel = new JPanel(new GridBagLayout()); // GridBagLayout để linh hoạt vị trí.
-		var gbc = new GridBagConstraints(); // Constraints cho GridBag.
-		gbc.insets = new Insets(5, 5, 5, 5); // Khoảng cách giữa components 5px.
+		setLayout(new BorderLayout());
 
-		// Tạo input textarea (trái input panel).
-		inputTextArea = new JTextArea(3, 25); // 3 dòng, 25 cột (giống demo).
-		inputTextArea.setText("hello moto"); // Text demo mặc định.
-		inputTextArea.setLineWrap(true); // Tự động wrap dòng.
-		inputTextArea.setWrapStyleWord(true); // Wrap theo từ.
-		inputScrollPane = new JScrollPane(inputTextArea); // Bọc scroll cho textarea.
-		gbc.gridx = 0; // Cột 0 (trái).
-		gbc.gridy = 0; // Hàng 0 (trên).
-		gbc.gridwidth = 1; // Chiếm 1 cột.
-		gbc.weightx = 1.0; // Mở rộng theo x.
-		gbc.fill = GridBagConstraints.BOTH; // Fill cả chiều rộng/cao.
-		inputPanel.add(inputScrollPane, gbc); // Thêm scroll vào panel.
+		var titlePanel = new JPanel(new BorderLayout());
+		titlePanel.setBackground(BG_COLOR);
+		titlePanel.setBorder(new EmptyBorder(15, 0, 15, 0));
+		var titleLabel = new JLabel("Caesar Cipher Demo", JLabel.CENTER);
+		titleLabel.setFont(new Font("Arial", Font.BOLD, 20));
+		titleLabel.setForeground(BORDER_COLOR);
+		titlePanel.add(titleLabel, BorderLayout.CENTER);
+		add(titlePanel, BorderLayout.NORTH);
 
-		// Tạo label "Key" cho input key (phải input textarea).
-		var inputKeyLabel = new JLabel("Key"); // Label "Key".
-		gbc.gridx = 1; // Cột 1 (phải).
-		gbc.gridy = 0; // Hàng 0.
-		gbc.gridwidth = 1; // 1 cột.
-		gbc.weightx = 0.0; // Không mở rộng.
-		gbc.fill = GridBagConstraints.NONE; // Không fill.
-		inputPanel.add(inputKeyLabel, gbc); // Thêm label.
+		var centerPanel = new JPanel();
+		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+		centerPanel.setBackground(BG_COLOR);
+		centerPanel.setBorder(new EmptyBorder(10, 20, 10, 20)); // Padding ngoài.
 
-		// Tạo input key field (dưới label key input).
-		inputKeyField = new JTextField("5"); // Key demo "5".
-		inputKeyField.setColumns(3); // Chiều rộng 3 ký tự.
-		gbc.gridy = 1; // Hàng 1 (dưới).
-		inputPanel.add(inputKeyField, gbc); // Thêm field.
+		var inputPanel = createSectionPanel("Input");
+		centerPanel.add(inputPanel);
 
-		// Tạo encrypt button (dưới key field input).
-		encryptButton = new JButton("Encryption"); // Button text giống demo.
-		gbc.gridy = 2; // Hàng 2 (dưới).
-		inputPanel.add(encryptButton, gbc); // Thêm button.
+		var gapPanel = new JPanel();
+		gapPanel.setPreferredSize(new Dimension(0, 20));
+		gapPanel.setOpaque(false);
+		centerPanel.add(gapPanel);
 
-		// Tạo panel cho output section (CENTER của frame).
-		var outputPanel = new JPanel(new GridBagLayout()); // Tương tự input panel.
-		var gbcOut = new GridBagConstraints(); // Constraints riêng cho output.
-		gbcOut.insets = new Insets(5, 5, 5, 5);
+		var outputPanel = createSectionPanel("Output");
+		centerPanel.add(outputPanel);
 
-		// Tạo output textarea (trái output panel, dưới input).
-		outputTextArea = new JTextArea(3, 25); // Tương tự input.
-		outputTextArea.setLineWrap(true);
-		outputTextArea.setWrapStyleWord(true);
-		outputTextArea.setEditable(false); // Không cho edit output.
-		outputScrollPane = new JScrollPane(outputTextArea); // Scroll cho output.
-		gbcOut.gridx = 0; // Cột 0.
-		gbcOut.gridy = 0; // Hàng 0.
-		gbcOut.gridwidth = 1;
-		gbcOut.weightx = 1.0;
-		gbcOut.fill = GridBagConstraints.BOTH;
-		outputPanel.add(outputScrollPane, gbcOut);
+		add(centerPanel, BorderLayout.CENTER);
 
-		// Tạo label "Key" cho output key (phải output textarea).
-		var outputKeyLabel = new JLabel("Key"); // Label "Key" thứ 2.
-		gbcOut.gridx = 1; // Cột 1.
-		gbcOut.gridy = 0; // Hàng 0.
-		gbcOut.gridwidth = 1;
-		gbcOut.weightx = 0.0;
-		gbcOut.fill = GridBagConstraints.NONE;
-		outputPanel.add(outputKeyLabel, gbcOut);
-
-		// Tạo output key field (dưới label key output, demo "0").
-		outputKeyField = new JTextField("0"); // Key demo "0" cho decrypt.
-		outputKeyField.setColumns(3);
-		gbcOut.gridy = 1; // Hàng 1.
-		outputPanel.add(outputKeyField, gbcOut);
-
-		// Tạo decrypt button (dưới key field output).
-		decryptButton = new JButton("Decryption"); // Button text giống demo.
-		gbcOut.gridy = 2; // Hàng 2.
-		outputPanel.add(decryptButton, gbcOut);
-
-		// Layout frame: BorderLayout với inputPanel NORTH, outputPanel CENTER.
-		setLayout(new BorderLayout()); // BorderLayout cho frame.
-		add(inputPanel, BorderLayout.NORTH); // Input section trên.
-		add(outputPanel, BorderLayout.CENTER); // Output section giữa (dưới input).
+		var backPanel = new JPanel(new BorderLayout());
+		backPanel.setBackground(BG_COLOR);
+		backPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
+		var backButton = createBackButton();
+		backPanel.add(backButton, BorderLayout.CENTER);
+		add(backPanel, BorderLayout.SOUTH);
 	}
 
 	/**
-	 * Method thiết lập event handlers (listeners) cho buttons. Encrypt: Lấy input
-	 * từ inputTextArea + inputKeyField → mã hóa → hiển thị outputTextArea. Decrypt:
-	 * Lấy input từ outputTextArea + outputKeyField → giải mã → hiển thị
-	 * inputTextArea (hoặc output).
+	 * Tạo nút quay về menu với style riêng.
+	 */
+	private JButton createBackButton() {
+		var button = new JButton("Quay về Menu");
+		button.setFont(new Font("Arial", Font.BOLD, 14));
+		button.setBackground(BACK_BUTTON_COLOR);
+		button.setForeground(Color.BLACK);
+		button.setFocusPainted(false);
+		button.setRolloverEnabled(false);
+		button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+		button.setBorderPainted(false);
+
+		// Hover ( như kiểu hiện màu khi di chuột vào đó)
+		button.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				button.setBackground(new Color(255, 105, 180));
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e) {
+				button.setBackground(BACK_BUTTON_COLOR);
+			}
+		});
+
+		// logic chạy (Action: Hiển thị menu chính và đóng frame nàyƯ)
+		button.addActionListener(e -> {
+			if (Program.getMainFrame() != null) {
+				Program.getMainFrame().setVisible(true);
+			}
+			dispose(); // Đóng frame
+		});
+
+		return button;
+	}
+
+	/**
+	 * Tạo panel con cho section (input hoặc output): GridBagLayout với textarea
+	 * trái, key dọc phải.
+	 *
+	 * @param sectionType: "Input" hoặc "Output" để phân biệt.
+	 */
+	private JPanel createSectionPanel(String sectionType) {
+		var sectionPanel = new JPanel(new GridBagLayout());
+		sectionPanel.setBackground(BG_COLOR);
+		sectionPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
+
+		var gbc = new GridBagConstraints();
+		gbc.insets = new Insets(5, 5, 5, 5);
+		gbc.fill = GridBagConstraints.BOTH;
+
+		var textArea = createStyledTextArea();
+
+		if (sectionType.equals("Input")) {
+			inputTextArea = textArea;
+			inputScrollPane = new JScrollPane(inputTextArea);
+		} else {
+			textArea.setEditable(false);
+			outputTextArea = textArea;
+			outputScrollPane = new JScrollPane(outputTextArea);
+		}
+		var scrollPane = (sectionType.equals("Input")) ? inputScrollPane : outputScrollPane;
+		scrollPane.setPreferredSize(new Dimension(500, 150));
+
+		gbc.gridx = 0;
+		gbc.gridy = 0;
+		gbc.weightx = 1.0;
+		gbc.weighty = 1.0;
+		sectionPanel.add(scrollPane, gbc);
+
+		var keyPanel = new JPanel();
+		keyPanel.setLayout(new BoxLayout(keyPanel, BoxLayout.Y_AXIS));
+		keyPanel.setOpaque(false);
+		keyPanel.setPreferredSize(new Dimension(180, 0));
+
+		var keyLabel = createStyledLabel("Key:");
+		keyPanel.add(keyLabel);
+
+		var keyField = (sectionType.equals("Input")) ? createStyledTextField("5") : createStyledTextField("0");
+		keyField.setMaximumSize(new Dimension(120, 30));
+		keyField.setAlignmentX(0.5f);
+		if (sectionType.equals("Input")) {
+			inputKeyField = keyField;
+			inputKeyField.setToolTipText("Nhập số shift (0-25)");
+		} else {
+			outputKeyField = keyField;
+			outputKeyField.setToolTipText("Nhập số shift để giải mã");
+		}
+		keyPanel.add(keyField);
+
+		// Button
+		var button = (sectionType.equals("Input")) ? createStyledButton("Encryption", "Mã hóa văn bản")
+				: createStyledButton("Decryption", "Giải mã văn bản");
+		button.setMaximumSize(new Dimension(160, 50));
+		button.setAlignmentX(0.5f); // Center.
+		if (sectionType.equals("Input")) {
+			encryptButton = button;
+		} else {
+			decryptButton = button;
+		}
+		keyPanel.add(button);
+
+		gbc.gridx = 1;
+		gbc.gridy = 0;
+		gbc.weightx = 0.0;
+		gbc.weighty = 1.0;
+		sectionPanel.add(keyPanel, gbc);
+
+		return sectionPanel;
+	}
+
+	/**
+	 * Tạo label styled: Font bold, color.
+	 */
+	private JLabel createStyledLabel(String text) {
+		var label = new JLabel(text);
+		label.setFont(new Font("Arial", Font.BOLD, 12));
+		label.setForeground(BORDER_COLOR);
+		label.setAlignmentX(0.5f); // Center trong box.
+		return label;
+	}
+
+	/**
+	 * Tạo TextArea styled: Monospace font, border, background.
+	 */
+	private JTextArea createStyledTextArea() {
+		var textArea = new JTextArea();
+		textArea.setFont(new Font("Courier New", Font.PLAIN, 13));
+		textArea.setBackground(Color.WHITE);
+		textArea.setBorder(new LineBorder(BORDER_COLOR, 1));
+		textArea.setLineWrap(true);
+		textArea.setWrapStyleWord(true);
+		return textArea;
+	}
+
+	/**
+	 * Tạo TextField styled: Border, columns, placeholder effect.
+	 */
+	private JTextField createStyledTextField(String defaultText) {
+		var field = new JTextField(defaultText);
+		field.setColumns(5);
+		field.setBorder(new CompoundBorder(new LineBorder(BORDER_COLOR, 1), new EmptyBorder(5, 5, 5, 5)));
+		field.setHorizontalAlignment(JTextField.CENTER);
+		var placeholder = defaultText;
+		field.setForeground(Color.GRAY);
+		field.getDocument().addDocumentListener(new DocumentListener() {
+			@Override
+			public void insertUpdate(DocumentEvent e) {
+				checkAndClear();
+			}
+
+			@Override
+			public void removeUpdate(DocumentEvent e) {
+				checkAndClear();
+			}
+
+			@Override
+			public void changedUpdate(DocumentEvent e) {
+				checkAndClear();
+			}
+
+			private void checkAndClear() {
+				var text = field.getText();
+				if (text.trim().isEmpty()) {
+					field.setText(placeholder);
+					field.setForeground(Color.GRAY);
+				} else if (text.equals(placeholder)) {
+					field.setText("");
+					field.setForeground(Color.BLACK);
+				}
+			}
+		});
+		return field;
+	}
+
+	/**
+	 * Tạo button styled: Không icon, không emoji, chữ đầy đủ, hover.
+	 */
+	private JButton createStyledButton(String text, String tooltip) {
+		var button = new JButton(text);
+		button.setFont(new Font("Arial", Font.BOLD, 12));
+		button.setBackground(BUTTON_COLOR);
+		button.setForeground(Color.BLACK);
+		button.setFocusPainted(false);
+		button.setRolloverEnabled(false);
+		button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+		button.setBorderPainted(false);
+
+		// Hover
+		button.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				button.setBackground(HOVER_COLOR);
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e) {
+				button.setBackground(BUTTON_COLOR);
+			}
+		});
+
+		button.setToolTipText(tooltip);
+		return button;
+	}
+
+	/**
+	 * Method thiết lập event cho buttons. Clear placeholder khi dùng key. Xóa kiểm
+	 * tra input
 	 */
 	private void setupEventHandlers() {
-		// Listener cho encrypt button: Mã hóa khi nhấn.
-		encryptButton.addActionListener(e -> {
-			var input = inputTextArea.getText().trim(); // Lấy văn bản từ input textarea và loại khoảng trắng thừa.
-			if (input.isEmpty()) { // Kiểm tra input rỗng.
-				JOptionPane.showMessageDialog(CaesarCipher.this, "Lỗi: Vui lòng nhập văn bản!"); // Hiển thị dialog
-																									// lỗi.
-				return; // Thoát nếu rỗng.
-			}
-			var keyStr = inputKeyField.getText().trim(); // Lấy key từ input key field.
-			if (keyStr.isEmpty()) { // Kiểm tra key rỗng.
-				JOptionPane.showMessageDialog(CaesarCipher.this, "Lỗi: Vui lòng nhập key (số)!"); // Dialog lỗi.
-				return;
-			}
-			int shift; // Biến lưu shift.
-			try {
-				shift = Integer.parseInt(keyStr); // Parse key thành int.
-				shift = Math.floorMod(shift, 26); // Chuẩn hóa shift: 0-25 (xử lý âm tự động).
-			} catch (NumberFormatException ex) { // Bắt lỗi parse không phải số.
-				JOptionPane.showMessageDialog(CaesarCipher.this, "Lỗi: Key phải là số nguyên!"); // Dialog lỗi.
-				return;
-			}
-			var encrypted = encryptCaesar(input, shift); // Gọi method mã hóa.
-			outputTextArea.setText(encrypted); // Hiển thị kết quả vào output textarea (không prefix để giống demo).
-			outputKeyField.setText(String.valueOf(shift)); // Đặt key output = shift (cho decrypt dùng chung).
-		});
 
-		// Listener cho decrypt button: Giải mã khi nhấn.
-		decryptButton.addActionListener(e -> {
-			var input = outputTextArea.getText().trim(); // Lấy ciphertext từ output textarea.
-			if (input.isEmpty()) { // Kiểm tra rỗng.
-				JOptionPane.showMessageDialog(CaesarCipher.this, "Lỗi: Vui lòng mã hóa trước!"); // Dialog lỗi.
+		encryptButton.addActionListener(e -> {
+			var input = inputTextArea.getText().trim();
+			if (input.isEmpty()) {
+				JOptionPane.showMessageDialog(this, "Lỗi: Vui lòng nhập văn bản!", "Cảnh báo",
+						JOptionPane.WARNING_MESSAGE);
 				return;
 			}
-			var keyStr = outputKeyField.getText().trim(); // Lấy key từ output key field.
-			if (keyStr.isEmpty()) {
-				JOptionPane.showMessageDialog(CaesarCipher.this, "Lỗi: Vui lòng nhập key (số)!"); // Dialog lỗi.
-				return;
+			var keyStr = inputKeyField.getText().trim();
+			if (keyStr.isEmpty() || keyStr.equals("5")) {
+				keyStr = "5";
 			}
+			inputKeyField.setForeground(Color.BLACK);
 			int shift;
 			try {
-				shift = Integer.parseInt(keyStr); // Parse key.
-				shift = Math.floorMod(shift, 26); // Chuẩn hóa.
+				shift = Integer.parseInt(keyStr);
+				shift = Math.floorMod(shift, 26);
 			} catch (NumberFormatException ex) {
-				JOptionPane.showMessageDialog(CaesarCipher.this, "Lỗi: Key phải là số nguyên!"); // Lỗi.
+				JOptionPane.showMessageDialog(this, "Lỗi: Key phải là số nguyên!", "Cảnh báo",
+						JOptionPane.WARNING_MESSAGE);
 				return;
 			}
-			var decrypted = decryptCaesar(input, shift); // Gọi method giải mã.
-			inputTextArea.setText(decrypted); // Hiển thị kết quả vào input textarea (quay về gốc).
+			var encrypted = encryptCaesar(input, shift);
+			outputTextArea.setText(encrypted);
+			outputKeyField.setText(String.valueOf(shift));
+			outputKeyField.setForeground(Color.BLACK);
+			inputTextArea.requestFocus();
+		});
+
+		decryptButton.addActionListener(e -> {
+			var input = outputTextArea.getText().trim();
+			if (input.isEmpty()) {
+				JOptionPane.showMessageDialog(this, "Lỗi: Vui lòng mã hóa trước!", "Cảnh báo",
+						JOptionPane.WARNING_MESSAGE);
+				return;
+			}
+			var keyStr = outputKeyField.getText().trim();
+			if (keyStr.isEmpty() || keyStr.equals("0")) {
+				keyStr = "0";
+			}
+			outputKeyField.setForeground(Color.BLACK);
+			int shift;
+			try {
+				shift = Integer.parseInt(keyStr);
+				shift = Math.floorMod(shift, 26);
+			} catch (NumberFormatException ex) {
+				JOptionPane.showMessageDialog(this, "Lỗi: Key phải là số nguyên!", "Cảnh báo",
+						JOptionPane.WARNING_MESSAGE);
+				return;
+			}
+			var decrypted = decryptCaesar(input, shift);
+			inputTextArea.setText(decrypted);
 		});
 	}
 
 	/**
-	 * Method mã hóa Caesar: Dịch mỗi chữ cái shift vị trí về phải, wrap around
-	 * alphabet. Giữ nguyên ký tự không phải chữ cái (space → space).
-	 *
-	 * @param plaintext: Văn bản gốc.
-	 * @param shift:     Số vị trí dịch (0-25).
-	 * @return Văn bản đã mã hóa.
+	 * Method mã hóa Caesar
 	 */
 	private String encryptCaesar(String plaintext, int shift) {
-		var result = new StringBuilder(); // StringBuilder để xây dựng chuỗi hiệu quả (không dùng + nhiều lần).
-		for (char c : plaintext.toCharArray()) { // Duyệt từng ký tự trong plaintext.
-			if (Character.isLetter(c)) { // Kiểm tra nếu là chữ cái (A-Z hoặc a-z).
-				var base = Character.isUpperCase(c) ? 'A' : 'a'; // Base: 'A' cho hoa, 'a' cho thường để giữ case.
-				// Công thức: (c - base + shift) % 26 + base → dịch và wrap (ví dụ: z +1 = a).
+		var result = new StringBuilder();
+		for (char c : plaintext.toCharArray()) {
+			if (Character.isLetter(c)) {
+				var base = Character.isUpperCase(c) ? 'A' : 'a';
 				result.append((char) ((c - base + shift) % 26 + base));
 			} else {
-				result.append(c); // Giữ nguyên ký tự khác (space, số, dấu).
+				result.append(c);
 			}
 		}
-		return result.toString(); // Chuyển StringBuilder thành String và trả về.
+		return result.toString();
 	}
 
 	/**
-	 * Method giải mã Caesar: Dịch ngược (shift âm tương đương 26 - shift).
-	 *
-	 * @param ciphertext: Văn bản mã hóa.
-	 * @param shift:      Shift gốc.
-	 * @return Văn bản gốc.
+	 * Method giải mã Caesar
 	 */
 	private String decryptCaesar(String ciphertext, int shift) {
-		// Giải mã = mã hóa với shift ngược: 26 - shift (vì modulo 26).
 		return encryptCaesar(ciphertext, 26 - shift);
 	}
-
-	/**
-	 * Method main: Điểm khởi đầu chương trình (demo chạy độc lập). Set Nimbus Look
-	 * and Feel nếu có (giống NetBeans generated).
-	 *
-	 * @param args: Tham số dòng lệnh (không dùng).
-	 */
-//	public static void main(String args[]) {
-//		// Set Nimbus L&F (nếu available, giống demo screenshot).
-//		try {
-//			for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
-//				if ("Nimbus".equals(info.getName())) { // Tìm Nimbus.
-//					UIManager.setLookAndFeel(info.getClassName()); // Áp dụng nếu tìm thấy.
-//					break;
-//				}
-//			}
-//		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException
-//				| UnsupportedLookAndFeelException ex) {
-//			// Bỏ qua lỗi L&F, dùng default.
-//		}
-//
-//		// Chạy trên Event Dispatch Thread (EDT) để Swing an toàn.
-//		EventQueue.invokeLater(() -> {
-//			new CaesarCipher().setVisible(true); // Tạo và hiển thị frame.
-//		});
-//	}
 }

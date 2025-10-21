@@ -1,16 +1,21 @@
-package entity; // Package entity cho cipher classes (giữ nguyên cấu trúc project).
+package entity;
 
-// Import AWT cho layout (BorderLayout, GridBagLayout) và events.
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-// Import Util cho ArrayList và Arrays (xử lý ma trận, pairs).
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 // Import Swing cho UI components (JFrame, JTextArea, etc.).
+import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -19,22 +24,26 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.UIManager;
+import javax.swing.UnsupportedLookAndFeelException;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+
+// Import Program để quay về menu chính.
+import app.Program;
 
 /**
- * Lớp PlayfairCipher: JFrame cho thuật toán Playfair Cipher với layout giống
- * demo series. Layout: Input textarea trên cùng với text demo "hide the gold",
- * key field + "Encryption" bên phải. Dưới: Output textarea với kết quả, key
- * field (giống input) + "Decryption" bên phải. Logic: Tạo ma trận 5x5 từ key
- * (loại duplicate, I/J chung), chuẩn hóa text (cặp chữ, thêm X), mã hóa/giải mã
- * theo quy tắc (hàng/cột/chéo). Demo: Input "hide the gold" key "playfair" →
- * Output "BMODZBXDNAB" (uppercase, không space).
+ * Lớp PlayfairCipher: JFrame cho thuật toán Playfair Cipher với giao diện cân
+ * bằng hiện đại. Layout: BorderLayout frame + GridBagLayout cho input/output
+ * panel con để align thẳng hàng. Thêm nút quay về menu chính.
  */
-public class PlayfairCipher extends JFrame { // Kế thừa JFrame để tạo cửa sổ chính.
-
-	// Components cho input section.
-	private JTextArea inputTextArea; // TextArea nhập plaintext (trên cùng).
-	private JTextField inputKeyField; // TextField key cho encrypt (string để tạo ma trận).
-	private JButton encryptButton; // Button "Encryption" bên dưới key input.
+public class PlayfairCipher extends JFrame {
+	private JTextArea inputTextArea;
+	private JTextField inputKeyField;
+	private JButton encryptButton;
 
 	// Components cho output section.
 	private JTextArea outputTextArea; // TextArea hiển thị ciphertext (dưới input).
@@ -48,167 +57,361 @@ public class PlayfairCipher extends JFrame { // Kế thừa JFrame để tạo c
 	// Ma trận Playfair 5x5 (instance variable để dùng chung encrypt/decrypt).
 	private char[][] matrix = new char[5][5]; // Ma trận toàn cục cho key.
 
+	// Colors cho theme hiện đại.
+	private static final Color BG_COLOR = new Color(240, 248, 255); // Xanh nhạt.
+	private static final Color BUTTON_COLOR = new Color(173, 216, 230); // Xanh nhạt cho button.
+	private static final Color HOVER_COLOR = new Color(135, 206, 235); // Xanh sáng hơn khi hover.
+	private static final Color BORDER_COLOR = new Color(70, 130, 180); // Xanh đậm cho border.
+	private static final Color BACK_BUTTON_COLOR = new Color(255, 182, 193); // Màu hồng nhạt cho nút quay về.
+
 	/**
 	 * Constructor: Khởi tạo UI, layout, và listeners.
 	 */
 	public PlayfairCipher() {
-		initComponents(); // Gọi method tạo và layout components (tương tự NetBeans generated).
-		setupEventHandlers(); // Gọi method thiết lập listeners cho buttons.
-		setTitle("Playfair cipher demo"); // Title frame (theo pattern demo).
-		setSize(600, 500); // Kích thước frame (rộng hơn để giống demo).
-		setLocationRelativeTo(null); // Đặt frame ở giữa màn hình.
-		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Đóng frame = thoát app (demo đơn lẻ).
-		setResizable(false); // Không cho resize để giữ layout.
+		initLookAndFeel();
+		initComponents(); //
+		setupEventHandlers();
+		setTitle("Playfair Cipher");
+		setSize(750, 600);
+		setLocationRelativeTo(null);
+		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+		setResizable(false);
+		getContentPane().setBackground(BG_COLOR);
+		inputTextArea.requestFocus();
 	}
 
 	/**
-	 * Method initComponents: Tạo components và layout giống pattern demo (tương tự
-	 * Caesar/Mono). Sử dụng BorderLayout cho frame: NORTH cho input section, CENTER
-	 * cho output section. Mỗi section dùng GridBagLayout để đặt textarea trái,
-	 * key/encrypt phải.
+	 * Áp dụng Nimbus Look and Feel cho giao diện hiện đại.
+	 */
+	private void initLookAndFeel() {
+		try {
+			for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
+				if ("Nimbus".equals(info.getName())) {
+					UIManager.setLookAndFeel(info.getClassName());
+					break;
+				}
+			}
+		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException
+				| UnsupportedLookAndFeelException ex) {
+			// Bỏ qua, dùng default.
+		}
+	}
+
+	/**
+	 * Method initComponents: Layout cân bằng với panel con cho input/output. Mỗi
+	 * panel: GridBag - textarea trái (weightx=1, weighty=1), key section phải
+	 * (BoxLayout dọc). Thêm nút quay về menu ở SOUTH.
 	 */
 	private void initComponents() {
-		// Tạo panel cho input section (NORTH của frame).
-		var inputPanel = new JPanel(new GridBagLayout()); // GridBagLayout để linh hoạt vị trí.
-		var gbc = new GridBagConstraints(); // Constraints cho GridBag.
-		gbc.insets = new Insets(5, 5, 5, 5); // Khoảng cách giữa components 5px.
-
-		// Tạo input textarea (trái input panel).
-		inputTextArea = new JTextArea(3, 25); // 3 dòng, 25 cột (giống demo).
-		inputTextArea.setText("hide the gold"); // Text demo chuẩn cho Playfair.
-		inputTextArea.setLineWrap(true); // Tự động wrap dòng.
-		inputTextArea.setWrapStyleWord(true); // Wrap theo từ.
-		inputScrollPane = new JScrollPane(inputTextArea); // Bọc scroll cho textarea.
-		gbc.gridx = 0; // Cột 0 (trái).
-		gbc.gridy = 0; // Hàng 0 (trên).
-		gbc.gridwidth = 1; // Chiếm 1 cột.
-		gbc.weightx = 1.0; // Mở rộng theo x.
-		gbc.fill = GridBagConstraints.BOTH; // Fill cả chiều rộng/cao.
-		inputPanel.add(inputScrollPane, gbc); // Thêm scroll vào panel.
-
-		// Tạo label "Key" cho input key (phải input textarea).
-		var inputKeyLabel = new JLabel("Key"); // Label "Key".
-		gbc.gridx = 1; // Cột 1 (phải).
-		gbc.gridy = 0; // Hàng 0.
-		gbc.gridwidth = 1; // 1 cột.
-		gbc.weightx = 0.0; // Không mở rộng.
-		gbc.fill = GridBagConstraints.NONE; // Không fill.
-		inputPanel.add(inputKeyLabel, gbc); // Thêm label.
-
-		// Tạo input key field (dưới label key input).
-		inputKeyField = new JTextField("playfair"); // Key demo chuẩn.
-		inputKeyField.setColumns(10); // Chiều rộng phù hợp.
-		gbc.gridy = 1; // Hàng 1 (dưới).
-		inputPanel.add(inputKeyField, gbc); // Thêm field.
-
-		// Tạo encrypt button (dưới key field input).
-		encryptButton = new JButton("Encryption"); // Button text giống demo.
-		gbc.gridy = 2; // Hàng 2 (dưới).
-		inputPanel.add(encryptButton, gbc); // Thêm button.
-
-		// Tạo panel cho output section (CENTER của frame).
-		var outputPanel = new JPanel(new GridBagLayout()); // Tương tự input panel.
-		var gbcOut = new GridBagConstraints(); // Constraints riêng cho output.
-		gbcOut.insets = new Insets(5, 5, 5, 5);
-
-		// Tạo output textarea (trái output panel, dưới input).
-		outputTextArea = new JTextArea(3, 25); // Tương tự input.
-		outputTextArea.setLineWrap(true);
-		outputTextArea.setWrapStyleWord(true);
-		outputTextArea.setEditable(false); // Không cho edit output.
-		outputScrollPane = new JScrollPane(outputTextArea); // Scroll cho output.
-		gbcOut.gridx = 0; // Cột 0.
-		gbcOut.gridy = 0; // Hàng 0.
-		gbcOut.gridwidth = 1;
-		gbcOut.weightx = 1.0;
-		gbcOut.fill = GridBagConstraints.BOTH;
-		outputPanel.add(outputScrollPane, gbcOut);
-
-		// Tạo label "Key" cho output key (phải output textarea).
-		var outputKeyLabel = new JLabel("Key"); // Label "Key" thứ 2.
-		gbcOut.gridx = 1; // Cột 1.
-		gbcOut.gridy = 0; // Hàng 0.
-		gbcOut.gridwidth = 1;
-		gbcOut.weightx = 0.0;
-		gbcOut.fill = GridBagConstraints.NONE;
-		outputPanel.add(outputKeyLabel, gbcOut);
-
-		// Tạo output key field (dưới label key output).
-		outputKeyField = new JTextField("playfair"); // Copy key demo.
-		outputKeyField.setColumns(10);
-		gbcOut.gridy = 1; // Hàng 1.
-		outputPanel.add(outputKeyField, gbcOut);
-
-		// Tạo decrypt button (dưới key field output).
-		decryptButton = new JButton("Decryption"); // Button text giống demo.
-		gbcOut.gridy = 2; // Hàng 2.
-		outputPanel.add(decryptButton, gbcOut);
-
-		// Layout frame: BorderLayout với inputPanel NORTH, outputPanel CENTER.
 		setLayout(new BorderLayout()); // BorderLayout cho frame.
-		add(inputPanel, BorderLayout.NORTH); // Input section trên.
-		add(outputPanel, BorderLayout.CENTER); // Output section giữa (dưới input).
+
+		// Title panel (NORTH).
+		var titlePanel = new JPanel(new BorderLayout());
+		titlePanel.setBackground(BG_COLOR);
+		titlePanel.setBorder(new EmptyBorder(15, 0, 15, 0));
+		var titleLabel = new JLabel("Playfair Cipher Demo", JLabel.CENTER);
+		titleLabel.setFont(new Font("Arial", Font.BOLD, 20));
+		titleLabel.setForeground(BORDER_COLOR);
+		titlePanel.add(titleLabel, BorderLayout.CENTER);
+		add(titlePanel, BorderLayout.NORTH);
+
+		// Center panel với BoxLayout dọc để stack input + gap + output.
+		var centerPanel = new JPanel();
+		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+		centerPanel.setBackground(BG_COLOR);
+		centerPanel.setBorder(new EmptyBorder(10, 20, 10, 20)); // Padding ngoài.
+
+		// Input panel con (GridBag: textarea trái, key phải).
+		var inputPanel = createSectionPanel("Input");
+		centerPanel.add(inputPanel);
+
+		// Gap giữa input/output (20px).
+		var gapPanel = new JPanel();
+		gapPanel.setPreferredSize(new Dimension(0, 20));
+		gapPanel.setOpaque(false);
+		centerPanel.add(gapPanel);
+
+		// Output panel con (tương tự).
+		var outputPanel = createSectionPanel("Output");
+		centerPanel.add(outputPanel);
+
+		add(centerPanel, BorderLayout.CENTER);
+
+		// Nút quay về menu (SOUTH).
+		var backPanel = new JPanel(new BorderLayout());
+		backPanel.setBackground(BG_COLOR);
+		backPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
+		var backButton = createBackButton();
+		backPanel.add(backButton, BorderLayout.CENTER);
+		add(backPanel, BorderLayout.SOUTH);
 	}
 
 	/**
-	 * Method thiết lập event handlers (listeners) cho buttons. Encrypt: Lấy input
-	 * từ inputTextArea + inputKeyField → chuẩn hóa → mã hóa → hiển thị
-	 * outputTextArea + copy key. Decrypt: Lấy input từ outputTextArea +
-	 * outputKeyField → giải mã → hiển thị inputTextArea (thêm cleanup X).
+	 * Tạo nút quay về mẹnu
 	 */
-	private void setupEventHandlers() {
-		// Listener cho encrypt button: Mã hóa khi nhấn.
-		encryptButton.addActionListener(e -> {
-			var input = inputTextArea.getText().trim(); // Lấy văn bản từ input textarea và loại khoảng trắng thừa.
-			if (input.isEmpty()) { // Kiểm tra input rỗng.
-				JOptionPane.showMessageDialog(PlayfairCipher.this, "Lỗi: Vui lòng nhập văn bản!"); // Hiển thị
-																									// dialog lỗi.
-				return; // Thoát nếu rỗng.
+	private JButton createBackButton() {
+		var button = new JButton("Quay về Menu");
+		button.setFont(new Font("Arial", Font.BOLD, 14));
+		button.setBackground(BACK_BUTTON_COLOR);
+		button.setForeground(Color.BLACK);
+		button.setFocusPainted(false);
+		button.setRolloverEnabled(false);
+		button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+		button.setBorderPainted(false);
+
+		// Hover effect.
+		button.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				button.setBackground(new Color(255, 105, 180)); // Hồng đậm hơn khi hover.
 			}
-			var keyStr = inputKeyField.getText().trim(); // Lấy key từ input key field.
-			if (keyStr.isEmpty()) { // Kiểm tra key rỗng.
-				JOptionPane.showMessageDialog(PlayfairCipher.this, "Lỗi: Vui lòng nhập key (string)!"); // Dialog
-																										// lỗi.
-				return;
-			}
-			try {
-				generateMatrix(keyStr.toUpperCase()); // Tạo ma trận từ key (uppercase).
-				var prepared = prepareText(input.toUpperCase().replaceAll("[^A-Z]", "")); // Chuẩn hóa: uppercase,
-																							// chỉ chữ, cặp + X.
-				var encrypted = encryptPlayfair(prepared); // Mã hóa cặp chữ.
-				outputTextArea.setText(encrypted); // Hiển thị kết quả vào output (uppercase, không space).
-				outputKeyField.setText(keyStr); // Copy key từ input sang output cho decrypt.
-			} catch (Exception ex) { // Bắt lỗi (key invalid, etc.).
-				JOptionPane.showMessageDialog(PlayfairCipher.this, "Lỗi: " + ex.getMessage()); // Dialog lỗi.
+
+			@Override
+			public void mouseExited(MouseEvent e) {
+				button.setBackground(BACK_BUTTON_COLOR);
 			}
 		});
 
-		// Listener cho decrypt button: Giải mã khi nhấn.
+		// Action: Hiển thị menu chính và đóng frame này.
+		button.addActionListener(e -> {
+			if (Program.getMainFrame() != null) {
+				Program.getMainFrame().setVisible(true);
+			}
+			dispose(); // Đóng frame con.
+		});
+
+		return button;
+	}
+
+	/**
+	 * Tạo panel con cho section (input hoặc output): GridBagLayout với textarea
+	 * trái, key dọc phải.
+	 *
+	 * @param sectionType: "Input" hoặc "Output" để phân biệt.
+	 */
+	private JPanel createSectionPanel(String sectionType) {
+		var sectionPanel = new JPanel(new GridBagLayout());
+		sectionPanel.setBackground(BG_COLOR);
+		sectionPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
+
+		var gbc = new GridBagConstraints();
+		gbc.insets = new Insets(5, 5, 5, 5);
+		gbc.fill = GridBagConstraints.BOTH;
+
+		var textArea = createStyledTextArea();
+		if (sectionType.equals("Input")) {
+			inputTextArea = textArea;
+			inputScrollPane = new JScrollPane(inputTextArea);
+		} else {
+			textArea.setEditable(false);
+			outputTextArea = textArea;
+			outputScrollPane = new JScrollPane(outputTextArea);
+		}
+		var scrollPane = (sectionType.equals("Input")) ? inputScrollPane : outputScrollPane;
+		scrollPane.setPreferredSize(new Dimension(500, 150));
+		gbc.gridx = 0;
+		gbc.gridy = 0;
+		gbc.weightx = 1.0;
+		gbc.weighty = 1.0;
+		sectionPanel.add(scrollPane, gbc);
+
+		// Key section phải: JPanel với BoxLayout dọc (label + field + button, thẳng
+		// hàng).
+		var keyPanel = new JPanel();
+		keyPanel.setLayout(new BoxLayout(keyPanel, BoxLayout.Y_AXIS));
+		keyPanel.setOpaque(false);
+		keyPanel.setPreferredSize(new Dimension(180, 0)); // Tăng rộng hơn để chữ đầy đủ.
+
+		// Label "Key:".
+		var keyLabel = createStyledLabel("Key:");
+		keyPanel.add(keyLabel);
+
+		// Key field.
+		var keyField = (sectionType.equals("Input")) ? createStyledTextField("playfair")
+				: createStyledTextField("playfair");
+		keyField.setMaximumSize(new Dimension(120, 30)); // Tăng rộng.
+		keyField.setAlignmentX(0.5f); // Center trong box.
+		if (sectionType.equals("Input")) {
+			inputKeyField = keyField;
+			inputKeyField.setToolTipText("Nhập chuỗi chữ cái làm key");
+		} else {
+			outputKeyField = keyField;
+			outputKeyField.setToolTipText("Nhập key để giải mã");
+		}
+		keyPanel.add(keyField);
+
+		// Button (không icon, không emoji, chữ đầy đủ).
+		var button = (sectionType.equals("Input")) ? createStyledButton("Encryption", "Mã hóa văn bản")
+				: createStyledButton("Decryption", "Giải mã văn bản");
+		button.setMaximumSize(new Dimension(160, 50)); // Tăng kích thước để chữ không bị cắt.
+		button.setAlignmentX(0.5f); // Center.
+		if (sectionType.equals("Input")) {
+			encryptButton = button;
+		} else {
+			decryptButton = button;
+		}
+		keyPanel.add(button);
+
+		// Thêm keyPanel vào cột 1 (phải).
+		gbc.gridx = 1;
+		gbc.gridy = 0;
+		gbc.weightx = 0.0;
+		gbc.weighty = 1.0;
+		sectionPanel.add(keyPanel, gbc);
+
+		return sectionPanel;
+	}
+
+	/**
+	 * Tạo label styled: Font bold, color.
+	 */
+	private JLabel createStyledLabel(String text) {
+		var label = new JLabel(text);
+		label.setFont(new Font("Arial", Font.BOLD, 12));
+		label.setForeground(BORDER_COLOR);
+		label.setAlignmentX(0.5f); // Center trong box.
+		return label;
+	}
+
+	/**
+	 * Tạo TextArea styled: Monospace font, border, background.
+	 */
+	private JTextArea createStyledTextArea() {
+		var textArea = new JTextArea();
+		textArea.setFont(new Font("Courier New", Font.PLAIN, 13));
+		textArea.setBackground(Color.WHITE);
+		textArea.setBorder(new LineBorder(BORDER_COLOR, 1));
+		textArea.setLineWrap(true);
+		textArea.setWrapStyleWord(true);
+		return textArea;
+	}
+
+	/**
+	 * Tạo TextField styled: Border, columns, placeholder effect.
+	 */
+	private JTextField createStyledTextField(String defaultText) {
+		var field = new JTextField(defaultText);
+		field.setColumns(10);
+		field.setBorder(new CompoundBorder(new LineBorder(BORDER_COLOR, 1), new EmptyBorder(5, 5, 5, 5)));
+		field.setHorizontalAlignment(JTextField.CENTER);
+		var placeholder = defaultText;
+		field.setForeground(Color.GRAY);
+		field.getDocument().addDocumentListener(new DocumentListener() {
+			@Override
+			public void insertUpdate(DocumentEvent e) {
+				checkAndClear();
+			}
+
+			@Override
+			public void removeUpdate(DocumentEvent e) {
+				checkAndClear();
+			}
+
+			@Override
+			public void changedUpdate(DocumentEvent e) {
+				checkAndClear();
+			}
+
+			private void checkAndClear() {
+				var text = field.getText();
+				if (text.trim().isEmpty()) {
+					field.setText(placeholder);
+					field.setForeground(Color.GRAY);
+				} else if (text.equals(placeholder)) {
+					field.setText("");
+					field.setForeground(Color.BLACK);
+				}
+			}
+		});
+		return field;
+	}
+
+	/**
+	 * Tạo button styled: Không icon, không emoji, chữ đầy đủ, hover.
+	 */
+	private JButton createStyledButton(String text, String tooltip) {
+		var button = new JButton(text);
+		button.setFont(new Font("Arial", Font.BOLD, 12));
+		button.setBackground(BUTTON_COLOR);
+		button.setForeground(Color.BLACK);
+		button.setFocusPainted(false);
+		button.setRolloverEnabled(false);
+		button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20)); // Padding rộng hơn cho chữ.
+		button.setBorderPainted(false);
+
+		button.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				button.setBackground(HOVER_COLOR);
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e) {
+				button.setBackground(BUTTON_COLOR);
+			}
+		});
+
+		button.setToolTipText(tooltip);
+		return button;
+	}
+
+	/**
+	 * Method thiết lập event handlers (listeners) cho buttons. Clear placeholder
+	 * khi dùng key. Chỉ kiểm tra rỗng cho input.
+	 */
+	private void setupEventHandlers() {
+		encryptButton.addActionListener(e -> {
+			var input = inputTextArea.getText().trim();
+			if (input.isEmpty()) {
+				JOptionPane.showMessageDialog(this, "Lỗi: Vui lòng nhập văn bản!"); // Hiển thị dialog lỗi.
+				return;
+			}
+			var keyStr = inputKeyField.getText().trim();
+			if (keyStr.isEmpty()) { // Kiểm tra key rỗng.
+				JOptionPane.showMessageDialog(this, "Lỗi: Vui lòng nhập key (string)!");
+				return;
+			}
+			inputKeyField.setForeground(Color.BLACK); // Clear placeholder color.
+			try {
+				generateMatrix(keyStr.toUpperCase()); // Tạo ma trận từ key (uppercase).
+				var prepared = prepareText(input.toUpperCase().replaceAll("[^A-Z]", "")); // Chuẩn hóa: uppercase, chỉ
+																							// chữ, cặp + X.
+				var encrypted = encryptPlayfair(prepared); // Mã hóa cặp chữ.
+				outputTextArea.setText(encrypted); // Hiển thị kết quả vào output (uppercase, không space).
+				outputKeyField.setText(keyStr); // Copy key từ input sang output cho decrypt.
+				outputKeyField.setForeground(Color.BLACK);
+			} catch (Exception ex) { // Bắt lỗi (key invalid, etc.).
+				JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage()); // Dialog lỗi.
+			}
+			inputTextArea.requestFocus();
+		});
+
+		// Listener cho decrypt button.
 		decryptButton.addActionListener(e -> {
 			var input = outputTextArea.getText().trim(); // Lấy ciphertext từ output textarea.
 			if (input.isEmpty()) { // Kiểm tra rỗng.
-				JOptionPane.showMessageDialog(PlayfairCipher.this, "Lỗi: Vui lòng mã hóa trước!"); // Dialog lỗi.
+				JOptionPane.showMessageDialog(this, "Lỗi: Vui lòng mã hóa trước!"); // Dialog lỗi.
 				return;
 			}
 			var keyStr = outputKeyField.getText().trim(); // Lấy key từ output key field.
 			if (keyStr.isEmpty()) {
-				JOptionPane.showMessageDialog(PlayfairCipher.this, "Lỗi: Vui lòng nhập key (string)!"); // Lỗi.
+				JOptionPane.showMessageDialog(this, "Lỗi: Vui lòng nhập key (string)!"); // Lỗi.
 				return;
 			}
+			outputKeyField.setForeground(Color.BLACK);
 			try {
 				generateMatrix(keyStr.toUpperCase()); // Tạo ma trận.
 				var decrypted = decryptPlayfair(input.toUpperCase()); // Giải mã và cleanup.
-				inputTextArea.setText(decrypted.toLowerCase()); // Hiển thị vào input (lowercase, thêm space nếu
-																// cần).
+				inputTextArea.setText(decrypted.toLowerCase()); // Hiển thị vào input (lowercase, với space nếu cần).
 			} catch (Exception ex) {
-				JOptionPane.showMessageDialog(PlayfairCipher.this, "Lỗi: " + ex.getMessage()); // Lỗi.
+				JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage()); // Lỗi.
 			}
 		});
 	}
 
 	/**
 	 * Helper: Tạo ma trận 5x5 từ key (loại duplicate, I/J chung, điền alphabet còn
-	 * lại).
+	 * lại). Giữ nguyên.
 	 *
 	 * @param key: Key string uppercase.
 	 */
@@ -217,7 +420,6 @@ public class PlayfairCipher extends JFrame { // Kế thừa JFrame để tạo c
 		var used = new boolean[26]; // Mảng đánh dấu chữ cái đã dùng (A=0, Z=25).
 		Arrays.fill(used, false); // Khởi tạo tất cả false.
 
-		// Xử lý key: Uppercase, thay J=I, loại duplicate.
 		for (char c : key.replace('J', 'I').toCharArray()) { // Duyệt key, thay J bằng I.
 			var idx = c - 'A'; // Index trong alphabet (A=0).
 			if (Character.isLetter(c) && !used[idx]) { // Nếu chữ cái và chưa dùng.
@@ -226,51 +428,48 @@ public class PlayfairCipher extends JFrame { // Kế thừa JFrame để tạo c
 			}
 		}
 
-		// Điền alphabet còn lại (bỏ J).
-		for (var i = 0; i < 26; i++) { // Duyệt A-Z.
-			if (!used[i] && i != 9) { // Nếu chưa dùng và không phải J (idx 9).
-				cleanedKey.append((char) ('A' + i)); // Thêm chữ cái.
+		for (var i = 0; i < 26; i++) {
+			if (!used[i] && i != 9) {
+				cleanedKey.append((char) ('A' + i));
 			}
 		}
 
-		// Đổ cleanedKey vào ma trận 5x5 (row-major).
-		var k = 0; // Index trong cleanedKey.
-		for (var i = 0; i < 5; i++) { // Duyệt 5 hàng.
-			for (var j = 0; j < 5; j++) { // Duyệt 5 cột.
-				matrix[i][j] = cleanedKey.charAt(k++); // Đặt char tại [i][j].
+		var k = 0;
+		for (var i = 0; i < 5; i++) {
+			for (var j = 0; j < 5; j++) {
+				matrix[i][j] = cleanedKey.charAt(k++);
 			}
 		}
 	}
 
 	/**
 	 * Helper: Chuẩn hóa text thành cặp chữ: Uppercase, chỉ chữ cái, thêm X nếu cặp
-	 * giống hoặc lẻ.
+	 * giống hoặc lẻ. Giữ nguyên.
 	 *
 	 * @param text: Text gốc.
 	 * @return String cặp chữ uppercase.
 	 */
 	private String prepareText(String text) {
-		var sb = new StringBuilder(); // Builder cho text sạch.
-		for (char c : text.toCharArray()) { // Duyệt text.
-			if (Character.isLetter(c)) { // Nếu chữ cái.
+		var sb = new StringBuilder();
+		for (char c : text.toCharArray()) {
+			if (Character.isLetter(c)) {
 				if (c == 'J') {
-					c = 'I'; // Thay J bằng I.
+					c = 'I';
 				}
-				sb.append(c); // Thêm uppercase (đã upper trước).
-			}
+				sb.append(c);
+			} // thay I bằng J
 		}
-		var clean = sb.toString(); // Text sạch chỉ chữ cái.
-
-		List<Character> pairs = new ArrayList<>(); // List để xây cặp.
-		for (var i = 0; i < clean.length(); i++) { // Duyệt clean.
-			pairs.add(clean.charAt(i)); // Thêm chữ đầu cặp.
-			if (i + 1 < clean.length()) { // Nếu còn chữ tiếp.
+		var clean = sb.toString();
+		List<Character> pairs = new ArrayList<>();
+		for (var i = 0; i < clean.length(); i++) {
+			pairs.add(clean.charAt(i));
+			if (i + 1 < clean.length()) {
 				if (clean.charAt(i) == clean.charAt(i + 1)) { // Nếu hai chữ giống.
 					pairs.add('X'); // Thêm X giữa, bỏ chữ thứ 2.
-					i++; // Skip i+1.
+					i++;
 				} else {
 					pairs.add(clean.charAt(i + 1)); // Thêm chữ thứ 2 bình thường.
-					i++; // Skip i+1.
+					i++;
 				}
 			}
 		}
@@ -279,169 +478,142 @@ public class PlayfairCipher extends JFrame { // Kế thừa JFrame để tạo c
 		}
 
 		// Xây string từ pairs.
-		sb = new StringBuilder(); // Reset builder.
-		for (char ch : pairs) { // Duyệt list.
-			sb.append(ch); // Thêm char.
+		sb = new StringBuilder();
+		for (char ch : pairs) {
+			sb.append(ch);
 		}
-		return sb.toString(); // Trả về cặp chữ.
+		return sb.toString();
 	}
 
 	/**
-	 * Helper: Mã hóa một cặp chữ theo quy tắc Playfair (cùng hàng → phải 1, cột →
-	 * xuống 1, chéo → đổi cột).
+	 * Helper: Mã hóa một cặp chữ theo quy tắc Playfair (cùng hàng ->phải 1, cột ->
+	 * xuống 1, chéo --> đổi cột)
 	 *
 	 * @param pair: Mảng 2 char.
 	 * @return Mảng 2 char mã hóa.
 	 */
 	private char[] encryptPair(char[] pair) {
-		var pos1 = findPosition(pair[0]); // Tìm vị trí [row, col] chữ 1.
-		var pos2 = findPosition(pair[1]); // Tìm vị trí chữ 2.
-		var result = new char[2]; // Mảng kết quả.
-
-		if (pos1[0] == pos2[0]) { // Cùng hàng: Dịch phải 1 (wrap %5).
+		var pos1 = findPosition(pair[0]);
+		var pos2 = findPosition(pair[1]);
+		var result = new char[2];
+		if (pos1[0] == pos2[0]) {
 			result[0] = matrix[pos1[0]][(pos1[1] + 1) % 5];
 			result[1] = matrix[pos2[0]][(pos2[1] + 1) % 5];
-		} else if (pos1[1] == pos2[1]) { // Cùng cột: Dịch xuống 1 (wrap %5).
+		} else if (pos1[1] == pos2[1]) {
 			result[0] = matrix[(pos1[0] + 1) % 5][pos1[1]];
 			result[1] = matrix[(pos2[0] + 1) % 5][pos2[1]];
-		} else { // Hình chữ nhật (chéo): Đổi cột.
+		} else {
 			result[0] = matrix[pos1[0]][pos2[1]];
 			result[1] = matrix[pos2[0]][pos1[1]];
 		}
-		return result; // Trả về cặp mã hóa.
+		return result;
 	}
 
 	/**
-	 * Method mã hóa Playfair: Chuẩn hóa text, mã hóa từng cặp.
+	 * Method mã hóa Playfair: Chuẩn hóa text, mã hóa từng cặp
 	 *
 	 * @param preparedText: Text đã chuẩn hóa thành cặp.
-	 * @return Ciphertext uppercase (không space).
+	 * @return Ciphertext uppercase (không space)
 	 */
 	private String encryptPlayfair(String preparedText) {
-		var result = new StringBuilder(); // Builder kết quả.
-		for (var i = 0; i < preparedText.length(); i += 2) { // Duyệt theo cặp (bước 2).
+		var result = new StringBuilder();
+		for (var i = 0; i < preparedText.length(); i += 2) {
 			char[] pair = { preparedText.charAt(i), preparedText.charAt(i + 1) }; // Lấy cặp.
-			var encPair = encryptPair(pair); // Mã hóa cặp.
-			result.append(encPair[0]).append(encPair[1]); // Thêm vào kết quả.
+			var encPair = encryptPair(pair);
+			result.append(encPair[0]).append(encPair[1]);
 		}
-		return result.toString(); // Trả về (ví dụ: "BMODZBXDNAB").
+		return result.toString();
 	}
 
 	/**
-	 * Helper: Giải mã một cặp chữ (ngược quy tắc: trái 1, lên 1, đổi cột).
+	 * Helper: Giải mã một cặp chữ (ngược quy tắc: trái 1, lên 1, đổi cột). Giữ
+	 * nguyên.
 	 *
 	 * @param pair: Mảng 2 char.
 	 * @return Mảng 2 char giải mã.
 	 */
 	private char[] decryptPair(char[] pair) {
-		var pos1 = findPosition(pair[0]); // Tìm vị trí chữ 1.
-		var pos2 = findPosition(pair[1]); // Tìm vị trí chữ 2.
-		var result = new char[2]; // Mảng kết quả.
-
-		if (pos1[0] == pos2[0]) { // Cùng hàng: Dịch trái 1 ( +4 %5 equiv -1).
+		var pos1 = findPosition(pair[0]);
+		var pos2 = findPosition(pair[1]);
+		var result = new char[2];
+		if (pos1[0] == pos2[0]) {
 			result[0] = matrix[pos1[0]][(pos1[1] + 4) % 5];
 			result[1] = matrix[pos2[0]][(pos2[1] + 4) % 5];
-		} else if (pos1[1] == pos2[1]) { // Cùng cột: Dịch lên 1 (+4 %5).
+		} else if (pos1[1] == pos2[1]) {
 			result[0] = matrix[(pos1[0] + 4) % 5][pos1[1]];
 			result[1] = matrix[(pos2[0] + 4) % 5][pos2[1]];
-		} else { // Chéo: Đổi cột (giống encrypt).
+		} else {
 			result[0] = matrix[pos1[0]][pos2[1]];
 			result[1] = matrix[pos2[0]][pos1[1]];
 		}
-		return result; // Trả về cặp giải mã.
+		return result;
 	}
 
 	/**
 	 * Method giải mã Playfair: Giải mã từng cặp, cleanup (loại X thừa, thêm space).
 	 *
+	 *
 	 * @param ciphertext: Ciphertext uppercase.
 	 * @return Plaintext (lowercase, với space ước lượng).
 	 */
 	private String decryptPlayfair(String ciphertext) {
-		var result = new StringBuilder(); // Builder kết quả.
-		for (var i = 0; i < ciphertext.length(); i += 2) { // Duyệt theo cặp.
-			char[] pair = { ciphertext.charAt(i), ciphertext.charAt(i + 1) }; // Lấy cặp.
-			var decPair = decryptPair(pair); // Giải mã cặp.
-			result.append(decPair[0]).append(decPair[1]); // Thêm vào.
+		var result = new StringBuilder();
+		for (var i = 0; i < ciphertext.length(); i += 2) {
+			char[] pair = { ciphertext.charAt(i), ciphertext.charAt(i + 1) };
+			var decPair = decryptPair(pair);
+			result.append(decPair[0]).append(decPair[1]);
 		}
-		var cleaned = cleanupText(result.toString()); // Cleanup: Loại X thừa, thêm space đơn giản (mỗi 5 char space).
-		return cleaned; // Trả về (ví dụ: "hide the gold").
+		var cleaned = cleanupText(result.toString());
+		return cleaned;
 	}
 
 	/**
-	 * Helper: Tìm vị trí [row, col] của char trong ma trận (thay J=I nếu cần).
+	 * Helper: Tìm vị trí [row, col] của char trong ma trận thay I bằng J
+	 *
 	 *
 	 * @param c: Char.
 	 * @return int[] {row, col}.
 	 */
 	private int[] findPosition(char c) {
 		if (c == 'J') {
-			c = 'I'; // Thay J bằng I.
+			c = 'I';
 		}
-		for (var i = 0; i < 5; i++) { // Duyệt 5 hàng.
-			for (var j = 0; j < 5; j++) { // Duyệt 5 cột.
-				if (matrix[i][j] == c) { // Nếu tìm thấy.
+		for (var i = 0; i < 5; i++) {
+			for (var j = 0; j < 5; j++) {
+				if (matrix[i][j] == c) {
 					return new int[] { i, j }; // Trả về vị trí.
 				}
 			}
 		}
-		return new int[] { -1, -1 }; // Không tìm thấy (lỗi).
+		return new int[] { -1, -1 };
 	}
 
 	/**
 	 * Helper: Cleanup text giải mã: Loại X thừa (cuối hoặc XX), thêm space ước
-	 * lượng (mỗi 5 char).
+	 * lượng (mỗi 5 char)
 	 *
 	 * @param text: Text thô uppercase.
 	 * @return Text sạch lowercase với space.
 	 */
 	private String cleanupText(String text) {
-		var sb = new StringBuilder(text.toLowerCase()); // Lowercase.
-		// Loại X cuối nếu lẻ.
+		var sb = new StringBuilder(text.toLowerCase());
 		while (sb.length() > 0 && sb.charAt(sb.length() - 1) == 'x') {
 			sb.deleteCharAt(sb.length() - 1); // Xóa X cuối.
 		}
 		// Loại XX giữa (thay bằng X hoặc loại tùy case, đơn giản loại một X).
-		for (var i = 1; i < sb.length(); i++) { // Duyệt từ i=1.
+		for (var i = 1; i < sb.length(); i++) {
 			if (sb.charAt(i - 1) == 'x' && sb.charAt(i) == 'x') {
 				sb.deleteCharAt(i); // Xóa X thứ 2.
 				i--; // Backtrack để kiểm tra tiếp.
 			}
 		}
-		// Thêm space ước lượng (mỗi 5 char space, vì Playfair thường 5-letter words).
 		var spaced = new StringBuilder();
-		for (var i = 0; i < sb.length(); i += 5) { // Bước 5.
-			spaced.append(sb.substring(i, Math.min(i + 5, sb.length()))); // Thêm 5 char.
-			if (i + 5 < sb.length()) { // Nếu còn.
-				spaced.append(" "); // Thêm space.
+		for (var i = 0; i < sb.length(); i += 5) {
+			spaced.append(sb.substring(i, Math.min(i + 5, sb.length())));
+			if (i + 5 < sb.length()) {
+				spaced.append(" ");
 			}
 		}
-		return spaced.toString().trim(); // Trim space thừa và trả về.
+		return spaced.toString().trim();
 	}
-
-	/**
-	 * Method main: Điểm khởi đầu chương trình (demo chạy độc lập). Set Nimbus Look
-	 * and Feel nếu có (giống NetBeans generated).
-	 *
-	 * @param args: Tham số dòng lệnh (không dùng).
-	 */
-//	public static void main(String args[]) {
-//		// Set Nimbus L&F (nếu available, giống demo screenshot).
-//		try {
-//			for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
-//				if ("Nimbus".equals(info.getName())) { // Tìm Nimbus.
-//					UIManager.setLookAndFeel(info.getClassName()); // Áp dụng nếu tìm thấy.
-//					break;
-//				}
-//			}
-//		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException
-//				| UnsupportedLookAndFeelException ex) {
-//			// Bỏ qua lỗi L&F, dùng default.
-//		}
-//
-//		// Chạy trên Event Dispatch Thread (EDT) để Swing an toàn.
-//		EventQueue.invokeLater(() -> {
-//			new PlayfairCipher().setVisible(true); // Tạo và hiển thị frame.
-//		});
-//	}
 }
